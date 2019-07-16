@@ -7,11 +7,12 @@
 #include <stdbool.h>
 
 
-struct winsize dim;
-int size, *map, readk, thold;
-bool color, gray, img;
+// define global vars
+int g_size, g_thld, g_rdn;
+bool g_col, g_gray, g_img;
 
 
+// print help message and exit
 void help()
 {
 	puts(
@@ -35,18 +36,20 @@ void help()
 }
 
 
+// parse cmd args and write to global vars
 void setup(int argc, char **argv)
 {
+	struct winsize dim;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ , &dim);
 
-	size = fmin(dim.ws_row, dim.ws_col/2) - 2;
-	if(size < 0 || size > 256) size = 256;
+	g_size = fmin(dim.ws_row, dim.ws_col/2) - 2;
+	if(g_size < 0 || g_size > 256) g_size = 256;
 
-	readk = -1;
-	thold = -1;
-	color = false;
-	gray = false;
-	img = false;
+	g_rdn = -1;
+	g_thld = -1;
+	g_col = false;
+	g_gray = false;
+	g_img = false;
 
 	for(int i=1; i<argc; i++)
 	{
@@ -58,20 +61,20 @@ void setup(int argc, char **argv)
 
 		else if(strcmp(argv[i], "--size")==0 || strcmp(argv[i], "-s")==0)
 		{
-			size = atoi(argv[++i]);
-			if(size == 0)
+			g_size = atoi(argv[++i]);
+			if(g_size == 0)
 			{
 				fprintf(stderr, "Invalid argument after %s\n", argv[i-1]);
 				exit(EXIT_FAILURE);
 			}
-			size = fmin(size, 256);
-			size = fmax(size, 0);
+			g_size = fmin(g_size, 256);
+			g_size = fmax(g_size, 0);
 		}
 
 		else if(strcmp(argv[i], "--bytes")==0 || strcmp(argv[i], "-b")==0)
 		{
-			readk = fmax(atoi(argv[++i]), 0);
-			if(readk == 0)
+			g_rdn = fmax(atoi(argv[++i]), 0);
+			if(g_rdn == 0)
 			{
 				fprintf(stderr, "Invalid argument after %s\n", argv[i-1]);
 				exit(EXIT_FAILURE);
@@ -80,27 +83,25 @@ void setup(int argc, char **argv)
 
 		else if(strcmp(argv[i], "--color")==0 || strcmp(argv[i], "-c")==0)
 		{
-			color = true;
-			gray = false;
+			g_col = true;
 		}
 
 		else if(strcmp(argv[i], "--gray")==0 || strcmp(argv[i], "-g")==0)
 		{
-			gray = true;
-			color = false;
+			g_gray = true;
 		}
 
 		else if(strcmp(argv[i], "--image")==0 || strcmp(argv[i], "-i")==0)
 		{
-			img = true;
+			g_img = true;
 		}
 
 		else if(strcmp(argv[i], "--thold")==0 || strcmp(argv[i], "-t")==0)
 		{
-			thold = 0;
+			g_thld = 0;
 			if(i+1 < argc)
 			{
-				thold = fmax(atoi(argv[i+1]), 0);
+				g_thld = fmax(atoi(argv[i+1]), 0);
 			}
 		}
 
@@ -113,59 +114,69 @@ void setup(int argc, char **argv)
 
 			exit(EXIT_FAILURE);
 		}
+
+		if(g_col && g_gray)
+		{
+			fprintf(stderr,
+				"Cannot set flags -c and -g\n"
+				"Try '%s --help' for more information.\n",
+			argv[0]);
+			exit(EXIT_FAILURE);
+		}
 	}
 }
 
 
-void generate()
+void generate(int *map)
 {
-	int memsize = sizeof(int)*size*size;
-	map = (int *)malloc(memsize);
-	memset(map, 0x00, memsize);
-
+	// prepare vars
 	int this, last = getchar();
 
+	// loop over input data
 	while((this = getchar()) != EOF)
 	{
-		if(readk == 0) break;
-		if(readk >  0) readk--;
-
-		int x = (int)floor(size * last / 256.0);
-		int y = (int)floor(size * this / 256.0);
-		map[x + size * y]++;
+		// count down bytes
+		if(g_rdn == 0) break;
+		if(g_rdn > 0) g_rdn--;
+		
+		// increment counter
+		int x = (int)floor(g_size * last / 256.0);
+		int y = (int)floor(g_size * this / 256.0); 
+		map[x + g_size * y]++;
 
 		last = this;
+		g_rdn--;
 	}
 }
 
 
-void draw()
+void draw(int *map)
 {
-	if(img) printf("P5\n%d %d\n%d\n", size, size, 0xff);
+	if(g_img) printf("P5\n%d %d\n%d\n", g_size, g_size, 0xff);
 	
-	for(int y=0; y<size; y++)
+	for(int y=0; y<g_size; y++)
 	{
-		for(int x=0; x<size; x++)
+		for(int x=0; x<g_size; x++)
 		{
-			int val = map[x + size * y];
+			int val = map[x + g_size * y];
 
-			if(thold != -1) val = 0xff * (val > thold);
+			if(g_thld != -1) val = 0xff * (val > g_thld);
 			else val = val < 0xff ? val : 0xff;
 
-			if(img)
+			if(g_img)
 			{
 				putchar(val);
 				continue;
 			}
 
-			if(color)
+			if(g_col)
 			{
 				int r = val;
 				int b = 255-val;
 				printf("\x1b[48;2;%d;%d;%dm", r, 0, b);
 			}
 
-			else if(gray)
+			else if(g_gray)
 			{
 				int fg = 255 * (val < 128);
 				int bg = val;
@@ -182,19 +193,29 @@ void draw()
 			printf("%02x", val);
 		}
 
-		if(color) printf("\x1b[0m");
-		if(!img) putchar('\n');
+		if(g_col) printf("\x1b[0m");
+		if(!g_img) putchar('\n');
 	}
 
-	if(!img) putchar('\n');
+	if(!g_img) putchar('\n');
 }
 
 
 int main(int argc, char *argv[])
 {
 	setup(argc, argv);
-	generate();
-	draw();
+
+	// init heatmap
+	int memsize = sizeof(int)*g_size*g_size;
+	int *map = (int *)malloc(memsize);
+	memset(map, 0x00, memsize);
+
+	// create and print heatmap
+	generate(map);
+	draw(map);
+
+	// free heatmap
+	free(map);
 
 	return 0;
 }
