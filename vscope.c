@@ -151,6 +151,7 @@ void generate(int *map)
 	}
 }
 
+#define ESC "\e"
 
 void draw(int *map)
 {
@@ -182,7 +183,7 @@ void draw(int *map)
 				int r = fmax(x, 0);
 				int g = 255 - fabs(x);
 				int b = fmax(-x, 0);
-				printf("\x1b[48;2;%d;%d;%dm", r, g, b);
+				printf(ESC"[48;2;%d;%d;%dm", r, g, b);
 			}
 
 			// output gray-scale color codes
@@ -190,8 +191,8 @@ void draw(int *map)
 			{
 				int fg = 255 * (val < 128);
 				int bg = val;
-				printf("\x1b[38;2;%d;%d;%dm", fg, fg, fg);
-				printf("\x1b[48;2;%d;%d;%dm", bg, bg, bg);
+				printf(ESC"[38;2;%d;%d;%dm", fg, fg, fg);
+				printf(ESC"[48;2;%d;%d;%dm", bg, bg, bg);
 			}
 
 			// output hex value
@@ -200,7 +201,7 @@ void draw(int *map)
 		}
 
 		// reset color code
-		if(g_col) printf("\x1b[0m");
+		if(g_col || g_gray) printf(ESC"[0m");
 
 		// add linebreak
 		if(!g_img) putchar('\n');
