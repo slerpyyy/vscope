@@ -12,7 +12,6 @@ int g_size, g_thld, g_rdn;
 bool g_col, g_gray, g_img;
 
 
-// print help message and exit
 void help()
 {
 	puts(
@@ -20,14 +19,15 @@ void help()
 		"Useful for classifing unknown datasets.\n\n"
 
 		"Options:\n"
-		"  -h, --help         Shows this message.\n"
+		"  -h, --help         Shows this message and exits.\n"
 		"  -s, --size=NUM     Changes the size of the heatmap. If this flag is not set,\n"
 		"                     the map will be sized to fit the terminal window.\n"
 		"  -b, --bytes=NUM    Only reads the first NUM bytes from STDIN.\n"
-		"  -c, --color        Colors the heatmap using ANSI escape codes. This might not\n"
-		"                     look as intendet, depending on the system this is running on.\n"
-		"  -g, --gray         Enables a gray-scale version of --color.\n"
-		"  -i, --image        Write pgm image data directly to STDOUT.\n"
+		"  -c, --color        Colors the heatmap using ANSI escape codes. This might\n"
+		"                     not look as intendet, depending on your terminal.\n"
+		"  -g, --gray         Enables a gray-scale version of --color. This flag\n"
+		"                     cannot be set in combination with --color.\n"
+		"  -p, --picture      Write pgm image data directly to STDOUT.\n"
 		"  -t, --thold=[NUM]  Checks if the value is higher than the threshold and\n"
 		"                     outputs either 00 or ff. If no NUM is defined, the\n"
 		"                     threshold will be set to 0.\n"
@@ -36,21 +36,22 @@ void help()
 }
 
 
-// parse cmd args and write to global vars
 void setup(int argc, char **argv)
 {
+	// auto detect size
 	struct winsize dim;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ , &dim);
-
-	g_size = fmin(dim.ws_row, dim.ws_col/2) - 2;
+	g_size = fmin(dim.ws_row, dim.ws_col/2) - 4;
 	if(g_size < 0 || g_size > 256) g_size = 256;
 
+	// set default values
 	g_rdn = -1;
 	g_thld = -1;
 	g_col = false;
 	g_gray = false;
 	g_img = false;
 
+	// parse cmd args
 	for(int i=1; i<argc; i++)
 	{
 		if(strcmp(argv[i], "--help")==0 || strcmp(argv[i], "-h")==0)
@@ -91,7 +92,7 @@ void setup(int argc, char **argv)
 			g_gray = true;
 		}
 
-		else if(strcmp(argv[i], "--image")==0 || strcmp(argv[i], "-i")==0)
+		else if(strcmp(argv[i], "--picture")==0 || strcmp(argv[i], "-p")==0)
 		{
 			g_img = true;
 		}
@@ -138,12 +139,13 @@ void generate(int *map)
 		// count down bytes
 		if(g_rdn == 0) break;
 		if(g_rdn > 0) g_rdn--;
-		
+
 		// increment counter
 		int x = (int)floor(g_size * last / 256.0);
 		int y = (int)floor(g_size * this / 256.0); 
 		map[x + g_size * y]++;
 
+		// update vars
 		last = this;
 		g_rdn--;
 	}
@@ -152,30 +154,38 @@ void generate(int *map)
 
 void draw(int *map)
 {
+	// print pgm header
 	if(g_img) printf("P5\n%d %d\n%d\n", g_size, g_size, 0xff);
-	
+
 	for(int y=0; y<g_size; y++)
 	{
 		for(int x=0; x<g_size; x++)
 		{
+			// read value from heatmap
 			int val = map[x + g_size * y];
 
+			// clamp value and step on threshold
 			if(g_thld != -1) val = 0xff * (val > g_thld);
-			else val = val < 0xff ? val : 0xff;
+			else val = fmin(val, 0xff);
 
+			// output raw byte in image mode
 			if(g_img)
 			{
 				putchar(val);
 				continue;
 			}
 
+			// calculate and output gay color codes
 			if(g_col)
 			{
-				int r = val;
-				int b = 255-val;
-				printf("\x1b[48;2;%d;%d;%dm", r, 0, b);
+				int x = val + val - 255;
+				int r = fmax(x, 0);
+				int g = 255 - fabs(x);
+				int b = fmax(-x, 0);
+				printf("\x1b[48;2;%d;%d;%dm", r, g, b);
 			}
 
+			// output gray-scale color codes
 			else if(g_gray)
 			{
 				int fg = 255 * (val < 128);
@@ -184,25 +194,26 @@ void draw(int *map)
 				printf("\x1b[48;2;%d;%d;%dm", bg, bg, bg);
 			}
 
-			if(val < 1)
-			{
-				printf("--");
-				continue;
-			}
-
-			printf("%02x", val);
+			// output hex value
+			if(val < 1) printf("--");
+			else printf("%02x", val);
 		}
 
+		// reset color code
 		if(g_col) printf("\x1b[0m");
+
+		// add linebreak
 		if(!g_img) putchar('\n');
 	}
 
+	// final linebreak for spacing
 	if(!g_img) putchar('\n');
 }
 
 
 int main(int argc, char *argv[])
 {
+	// setup global vars
 	setup(argc, argv);
 
 	// init heatmap
@@ -217,5 +228,7 @@ int main(int argc, char *argv[])
 	// free heatmap
 	free(map);
 
+	// clean exit
+	exit(EXIT_SUCCESS);
 	return 0;
 }

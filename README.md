@@ -11,14 +11,15 @@ Visualizes STDIN by writing a 2D histogram to STDOUT.
 Useful for classifing unknown datasets.
 
 Options:
-  -h, --help         Shows this message.
+  -h, --help         Shows this message and exits.
   -s, --size=NUM     Changes the size of the heatmap. If this flag is not set,
                      the map will be sized to fit the terminal window.
   -b, --bytes=NUM    Only reads the first NUM bytes from STDIN.
-  -c, --color        Colors the heatmap using ANSI escape codes. This might not
-                     look as intendet, depending on the system this is running on.
-  -g, --gray         Enables a gray-scale version of --color.
-  -i, --image        Write pgm image data directly to STDOUT.
+  -c, --color        Colors the heatmap using ANSI escape codes. This might
+                     not look as intendet, depending on your terminal.
+  -g, --gray         Enables a gray-scale version of --color. This flag
+                     cannot be set in combination with --color.
+  -p, --picture      Write pgm image data directly to STDOUT.
   -t, --thold=[NUM]  Checks if the value is higher than the threshold and
                      outputs either 00 or ff. If no NUM is defined, the
                      threshold will be set to 0.
