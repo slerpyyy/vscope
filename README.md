@@ -64,9 +64,15 @@ $ cat vscope.c | ./vscope -s 32
 ```
 
 ## Build
-I recommend compiling the program using the following command:
+I included a makefile, so this part shouldn't be too difficult.
+
+Compile the program:
 ```
-gcc vscope.c -o vscope -lm -Wall
+make
+```
+Install the program:
+```
+make install
 ```
 
 ## Extra Credit

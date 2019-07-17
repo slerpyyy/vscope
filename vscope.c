@@ -41,7 +41,7 @@ void setup(int argc, char **argv)
 	// auto detect size
 	struct winsize dim;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ , &dim);
-	g_size = fmin(dim.ws_row, dim.ws_col/2) - 4;
+	g_size = fmin(dim.ws_row-4, dim.ws_col/2);
 	if(g_size < 0 || g_size > 256) g_size = 256;
 
 	// set default values
@@ -151,7 +151,6 @@ void generate(int *map)
 	}
 }
 
-#define ESC "\e"
 
 void draw(int *map)
 {
@@ -183,7 +182,7 @@ void draw(int *map)
 				int r = fmax(x, 0);
 				int g = 255 - fabs(x);
 				int b = fmax(-x, 0);
-				printf(ESC"[48;2;%d;%d;%dm", r, g, b);
+				printf("\e[48;2;%d;%d;%dm", r, g, b);
 			}
 
 			// output gray-scale color codes
@@ -191,8 +190,8 @@ void draw(int *map)
 			{
 				int fg = 255 * (val < 128);
 				int bg = val;
-				printf(ESC"[38;2;%d;%d;%dm", fg, fg, fg);
-				printf(ESC"[48;2;%d;%d;%dm", bg, bg, bg);
+				printf("\e[38;2;%d;%d;%dm", fg, fg, fg);
+				printf("\e[48;2;%d;%d;%dm", bg, bg, bg);
 			}
 
 			// output hex value
@@ -201,7 +200,7 @@ void draw(int *map)
 		}
 
 		// reset color code
-		if(g_col || g_gray) printf(ESC"[0m");
+		if(g_col || g_gray) printf("\e[0m");
 
 		// add linebreak
 		if(!g_img) putchar('\n');
