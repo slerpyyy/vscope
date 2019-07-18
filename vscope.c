@@ -1,15 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <math.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <stdbool.h>
 
 
 // define global vars
-int g_size, g_thld, g_rdn;
-bool g_col, g_gray, g_img;
+bool g_col, g_gray, g_img, g_lv;
+int16_t g_size, g_thld;
+int64_t g_rdn;
 
 
 void help()
@@ -50,6 +52,7 @@ void setup(int argc, char **argv)
 	g_col = false;
 	g_gray = false;
 	g_img = false;
+	g_lv = false;
 
 	// parse cmd args
 	for(int i=1; i<argc; i++)
@@ -74,12 +77,47 @@ void setup(int argc, char **argv)
 
 		else if(strcmp(argv[i], "--bytes")==0 || strcmp(argv[i], "-b")==0)
 		{
-			g_rdn = fmax(atoi(argv[++i]), 0);
+			int len = strlen(argv[++i]);
+			int64_t mul = 1;
+
+			if(len > 1)
+			{
+				// fetch last char
+				char post = argv[i][len-1];
+
+				// post is not number literal
+				if(post > 0x39 || post < 0x30)
+				{
+					// shorten string
+					argv[i][len-1] = '\0';
+					mul = 0;
+
+					// find postfix
+					if(post == 'k')mul = 1000;
+					if(post == 'K')mul = 1024;
+					if(post == 'm')mul = 1000000;
+					if(post == 'M')mul = 1048576;
+					if(post == 'g')mul = 1000000000;
+					if(post == 'G')mul = 1073742000;
+					if(post == 't')mul = 1000000000000;
+					if(post == 'T')mul = 1099512000000;
+					if(post == 'p')mul = 1000000000000000;
+					if(post == 'P')mul = 1125900000000000;
+				}
+			}
+
+			g_rdn = mul * fmax(atoi(argv[i]), 0);
+
 			if(g_rdn == 0)
 			{
 				fprintf(stderr, "Invalid argument after %s\n", argv[i-1]);
 				exit(EXIT_FAILURE);
 			}
+		}
+
+		else if(strcmp(argv[i], "--live")==0 || strcmp(argv[i], "-l")==0)
+		{
+			g_lv = true;
 		}
 
 		else if(strcmp(argv[i], "--color")==0 || strcmp(argv[i], "-c")==0)
@@ -115,44 +153,68 @@ void setup(int argc, char **argv)
 
 			exit(EXIT_FAILURE);
 		}
+	}
 
-		if(g_col && g_gray)
-		{
-			fprintf(stderr,
-				"Cannot set flags -c and -g\n"
-				"Try '%s --help' for more information.\n",
-			argv[0]);
-			exit(EXIT_FAILURE);
-		}
+	// check for contradictions
+	if(g_col && g_gray)
+	{
+		fprintf(stderr,
+			"Cannot use both color themes at once\n"
+			"Try '%s --help' for more information.\n",
+		argv[0]);
+		exit(EXIT_FAILURE);
+	}
+
+	if(g_img && g_lv)
+	{
+		fprintf(stderr,
+			"Cannot output image data in live mode\n"
+			"Try '%s --help' for more information.\n",
+		argv[0]);
+		exit(EXIT_FAILURE);
 	}
 }
 
 
-void generate(int *map)
+void generate(uint8_t *map)
 {
 	// prepare vars
 	int this, last = getchar();
+	int64_t cnt = 0;
 
 	// loop over input data
-	while((this = getchar()) != EOF)
+	while(1)
 	{
+		// read byte
+		this = getchar();
+
+		// check for EOF
+		if(this == EOF)
+		{
+			g_lv = false;
+			break;
+		}
+
 		// count down bytes
-		if(g_rdn == 0) break;
-		if(g_rdn > 0) g_rdn--;
+		if(g_rdn > 0)
+		{
+			if(cnt >= g_rdn)break;
+			cnt++;
+		}
 
 		// increment counter
 		int x = (int)floor(g_size * last / 256.0);
-		int y = (int)floor(g_size * this / 256.0); 
-		map[x + g_size * y]++;
+		int y = (int)floor(g_size * this / 256.0);
+		int i = x + g_size * y;
+		if(map[i] < 0xff)map[i]++;
 
 		// update vars
 		last = this;
-		g_rdn--;
 	}
 }
 
 
-void draw(int *map)
+void draw(uint8_t *map)
 {
 	// print pgm header
 	if(g_img) printf("P5\n%d %d\n%d\n", g_size, g_size, 0xff);
@@ -166,7 +228,6 @@ void draw(int *map)
 
 			// clamp value and step on threshold
 			if(g_thld != -1) val = 0xff * (val > g_thld);
-			else val = fmin(val, 0xff);
 
 			// output raw byte in image mode
 			if(g_img)
@@ -179,17 +240,17 @@ void draw(int *map)
 			if(g_col)
 			{
 				int x = val + val - 255;
-				int r = fmax(x, 0);
-				int g = 255 - fabs(x);
-				int b = fmax(-x, 0);
+				uint8_t r = fmax(x, 0);
+				uint8_t g = 255 - fabs(x);
+				uint8_t b = fmax(-x, 0);
 				printf("\e[48;2;%d;%d;%dm", r, g, b);
 			}
 
 			// output gray-scale color codes
 			else if(g_gray)
 			{
-				int fg = 255 * (val < 128);
-				int bg = val;
+				uint8_t bg = val;
+				uint8_t fg = 255 * (bg < 128);
 				printf("\e[38;2;%d;%d;%dm", fg, fg, fg);
 				printf("\e[48;2;%d;%d;%dm", bg, bg, bg);
 			}
@@ -208,6 +269,8 @@ void draw(int *map)
 
 	// final linebreak for spacing
 	if(!g_img) putchar('\n');
+
+	if(g_lv) printf("\e[%dA", g_size+1);
 }
 
 
@@ -217,13 +280,19 @@ int main(int argc, char *argv[])
 	setup(argc, argv);
 
 	// init heatmap
-	int memsize = sizeof(int)*g_size*g_size;
-	int *map = (int *)malloc(memsize);
+	int memsize = sizeof(uint8_t)*g_size*g_size;
+	uint8_t *map = (uint8_t *)malloc(memsize);
+
+	// clear map
 	memset(map, 0x00, memsize);
+
+	_repeat:
 
 	// create and print heatmap
 	generate(map);
 	draw(map);
+
+	if(g_lv) goto _repeat;
 
 	// free heatmap
 	free(map);
