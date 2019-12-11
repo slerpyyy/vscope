@@ -117,6 +117,7 @@ void setup(int argc, char **argv)
 
 		else if(strcmp(argv[i], "--live")==0 || strcmp(argv[i], "-l")==0)
 		{
+			if(g_rdn < 0)g_rdn = 1024;
 			g_lv = true;
 		}
 
